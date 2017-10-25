@@ -5,7 +5,7 @@ from flask import Flask, render_template, flash, redirect, url_for, session, log
 from flask_mysqldb import MySQL
 
 #For form validation etc
-from wtforms import Form, StringField, TextAreaField, PasswordField, validators
+from wtforms import Form, StringField, TextAreaField, PasswordField, validators, IntegerField, FieldList, BooleanField, FormField, DateField
 
 #For password encryption
 from passlib.hash import sha256_crypt
@@ -15,6 +15,9 @@ from functools import wraps
 
 #for sending emails
 from flask_mail import Mail, Message
+
+#for getting the current date
+import datetime
 
 #creating the app engine
 app = Flask(__name__)
@@ -32,6 +35,7 @@ mail_configure(app)
 mail = Mail(app)
 '''
 
+
 #To avoid manual url changes to view unauthorized dashboard
 def is_logged_in(f):
 	@wraps(f)
@@ -42,6 +46,35 @@ def is_logged_in(f):
 			flash('Unauthorized, please log in first.', 'danger')
 			return redirect(url_for('login'))
 	return wrap
+
+
+
+@app.route('/dashboard_menu')
+@is_logged_in
+def dashboard_menu():
+	return render_template('dashboard_menu.html')
+
+@app.route('/all_transactions')
+@is_logged_in
+def all_transactions():
+	return render_template('all_transactions.html')
+
+@app.route('/first_button')
+@is_logged_in
+def first():
+	return render_template('firstbtn.html')
+
+@app.route('/second_button')
+@is_logged_in
+def second():
+	return render_template('secondbtn.html')
+
+@app.route('/add-friend-html')
+@is_logged_in
+def add_friend_html():
+	return render_template('add-friend.html')
+
+
 
 
 
@@ -74,9 +107,6 @@ def invite():
 	return redirect(url_for('dashboard'))
 '''
 
-
-
-
 #Adding friends
 @app.route('/dashboard/add-friend', methods = ['POST'])
 @is_logged_in
@@ -88,20 +118,24 @@ def add_friend():
 		result = cur.execute("select * from friends where friend1 = %s and friend2 = %s",(session['username'],username))
 		
 		if result == 0:
-			#Now add the user to the database, handling two way friendships
-			cur.execute("insert into friends (friend1, friend2) values(%s, %s)", (session['username'], username))
-			cur.execute("insert into friends (friend2, friend1) values(%s, %s)", (session['username'], username))
-			
-			mysql.connection.commit()
-			flash('Friend added successfully!','success')
 
+			if username != session['username']:
+				#Now add the user to the database, handling two way friendships
+				cur.execute("insert into friends (friend1, friend2) values(%s, %s)", (session['username'], username))
+				cur.execute("insert into friends (friend2, friend1) values(%s, %s)", (session['username'], username))
+				
+				mysql.connection.commit()
+				flash('Friend added successfully!','success')
+			
+			else:
+				flash('Cannot add yourself as a friend!','danger')
 		else:
 			flash('Friend already added cannot be added again!','danger')
 	else:
 		flash('Requested username does not exist!','danger')
 
-	cur.close()
-	return redirect(url_for('dashboard'))
+	return redirect(url_for('add_friend_html'))
+
 
 
 
@@ -146,6 +180,52 @@ def login():
 			return render_template('login.html', error=error)
 
 	return render_template('login.html')
+
+
+
+
+
+
+#REGISTRATION
+class RegisterForm(Form):
+	name = StringField('Name', [validators.Length(min=1, max=50)])
+	username = StringField('Username', [validators.Length(min=4, max=25)])
+	email = StringField('Email', [validators.Length(min=6, max=50)])
+	password = PasswordField('Password', [
+		validators.DataRequired(),
+		validators.EqualTo('confirm', message='Passwords do not match')
+	])
+	confirm = PasswordField('Confirm Password')
+
+@app.route('/register', methods = ['GET', 'POST'])
+def register():
+	form = RegisterForm(request.form)
+	if request.method == 'POST' and form.validate():
+		name = form.name.data
+		email = form.email.data
+		username = form.username.data
+		password = sha256_crypt.encrypt(str(form.password.data)) #creating password hash
+
+		cur = mysql.connection.cursor()
+		cur.execute('insert into users(name, email, username, password) values(%s, %s, %s, %s)', (name, email, username, password))
+		mysql.connection.commit()
+		cur.close()
+
+		flash('Successfully registered! Log in to continue.', 'success')
+		return redirect(url_for('login'))
+
+
+	return render_template('register.html', form = form)
+
+
+
+@app.route('/logout')
+@is_logged_in
+def logout():
+	session.clear()
+	flash('Successfully logged out.','success')
+	return redirect(url_for('login'))
+
 
 
 
@@ -259,52 +339,227 @@ def settleup():
 
 
 
-#REGISTRATION
-class RegisterForm(Form):
-	name = StringField('Name', [validators.Length(min=1, max=50)])
-	username = StringField('Username', [validators.Length(min=4, max=25)])
-	email = StringField('Email', [validators.Length(min=6, max=50)])
-	password = PasswordField('Password', [
-        validators.DataRequired(),
-        validators.EqualTo('confirm', message='Passwords do not match')
-    ])
-	confirm = PasswordField('Confirm Password')
 
-@app.route('/register', methods = ['GET', 'POST'])
-def register():
-	form = RegisterForm(request.form)
-	if request.method == 'POST' and form.validate():
-		name = form.name.data
-		email = form.email.data
-		username = form.username.data
-		password = sha256_crypt.encrypt(str(form.password.data)) #creating password hash
 
-		cur = mysql.connection.cursor()
-		cur.execute('insert into users(name, email, username, password) values(%s, %s, %s, %s)', (name, email, username, password))
+#ADD A BILL
+
+class PaidByForm(Form):
+	paid_by = StringField("Enter person who paid")
+	paid_by_amount = IntegerField("Enter amount paid")	
+
+class SplitByForm(Form):
+	split_by = StringField("Enter person who spent")
+	split_by_amount = IntegerField("Enter amount spent")
+
+class PeopleInBill(Form):
+	person_in_bill = StringField("Enter person in the bill")
+
+class AddBillForm(Form):
+	#Description
+	desc = StringField("Enter bill description", validators = [validators.DataRequired()])
+	#Amount
+	amt = IntegerField("Enter the total bill amount", validators = [validators.DataRequired()])
+	#Notes
+	notes = TextAreaField("Enter extra bill notes (Optonal) ")
+	#Date
+	date = DateField("Enter the date for the bill (Optional)")
+
+	#People in the bill
+	people_in_bill = FieldList(FormField(PeopleInBill), min_entries = 3)
+
+	#PAID BY
+	paid_by_list = FieldList(FormField(PaidByForm), min_entries = 3)
+	paid_equally = BooleanField("Paid Equally?")
+
+	#SPLIT BY
+	split_by_list = FieldList(FormField(SplitByForm), min_entries = 3)
+	split_equally = BooleanField("Split Equally?")
+	
+def mincashflow(amount, people_in_bill, final_string, counter = 0):
+	
+	'''
+	
+	Finding the indexes of minimum and maximum values in amount[] amount[mxCredit] indicates the maximum amount to be given
+	(or credited) to any person . And amount[mxDebit] indicates the maximum amount to be taken (or debited) from any person.
+	So if there is a positive value in amount[], then there must be a negative value
+	
+	'''
+	mxDebit, mxCredit = get_index(amount)
+
+	# If both amounts are 0, then all amounts are settled
+	if (amount[mxCredit] == 0 and amount[mxDebit] == 0) or (amount[mxDebit] > -1 and amount[mxDebit] < 0) or (amount[mxCredit] > 0 and amount[mxCredit] < 1):
+		return
+
+	#Find the minimum of two amounts
+	minimum = minOf2(-amount[mxDebit], amount[mxCredit])
+	
+	amount[mxCredit] -= minimum;
+	amount[mxDebit] += minimum;
+
+	# If minimum is the maximum amount to be
+	s = str(people_in_bill[mxDebit])+ " has to pay " + str(minimum) + " to " + str(people_in_bill[mxCredit])
+	logger(s)
+	final_string.append(s)
+
+
+	#Add
+	add_debt(payer = people_in_bill[mxDebit],spender = people_in_bill[mxCredit],amt = minimum)
+	
+	'''
+	
+	Recur for the amount array.  Note that it is guaranteed that
+	the recursion would terminate as either amount[mxCredit] 
+	or  amount[mxDebit] becomes 0
+	
+	'''
+	mincashflow(amount, people_in_bill, final_string)
+
+def get_index(l):
+	min_index = 0
+	max_index = 0
+
+	minimum = l[0]
+	maximum = l[0]
+
+	for i in range(1,len(l)):
+		if l[i] >= maximum:
+			maximum = l[i]
+			max_index = i
+
+		if l[i] <= minimum:
+			minimum = l[i]
+			min_index = i
+	
+	return (min_index, max_index)
+
+
+
+def minOf2(a,b):
+	return a if a <= b else b 
+
+def add_debt(payer, spender, amt):
+	cur = mysql.connection.cursor()
+	result = cur.execute("select max(bill_id) from bill_details")
+	if result > 0:
+		data = cur.fetchone()
+		bill_id = data['max(bill_id)']
+		cur.execute('insert into bill_payers (bill_id, bill_payer, amount) values (%s, %s, %s)', (bill_id, payer, amt))
+		cur.execute('insert into bill_spenders (bill_id, bill_spender, amount) values (%s, %s, %s)', (bill_id, spender, amt))
+		cur.execute('insert into debt (sender, receiver, amount) values (%s, %s, %s)', (spender, payer, amt))
 		mysql.connection.commit()
 		cur.close()
 
-		flash('Successfully registered! Log in to continue.', 'success')
-		return redirect(url_for('login'))
 
-
-	return render_template('register.html', form = form)
-
-
-
-
-
-
-
-
-@app.route('/logout')
+@app.route('/dashboard/add-a-bill', methods = ['GET', 'POST'])
 @is_logged_in
-def logout():
-	session.clear()
-	flash('Successfully logged out.','success')
-	return redirect(url_for('login'))
+def add_bill():
+	form = AddBillForm(request.form)
+
+	if request.method == 'POST' and form.validate():
+
+		#Basic bill datails
+		total_amount = form.amt.data
+		description = form.desc.data
+		notes = form.notes.data
+		current_date = form.date.data
+
+		#If date not provided by the user, the current date is set
+		if current_date == None:
+			current_date = datetime.date.today()
+
+		#Putting bill details into the database
+		cur = mysql.connection.cursor()
+		cur.execute('insert into bill_details (bill_amount, description, notes, date) values (%s, %s, %s, %s)', (total_amount, description, notes, current_date))
+		mysql.connection.commit()
+		cur.close()
+
+		#Getting the people in the bill
+		people_in_bill = []
+		for entry in form.people_in_bill.entries:
+			people_in_bill.append(entry.data['person_in_bill'])
+		size = len(people_in_bill)
+		
+		#Paying details
+		paid_by = []
+		paid_by_amounts = []
+		paid_equally = False
+		for entry in form.paid_by_list.entries:
+			paid_by.append(entry.data['paid_by'])
+			paid_by_amounts.append(entry.data['paid_by_amount'])
+
+		paid_equally = form.paid_equally.data
+
+		#Spliting details
+		split_by = []
+		split_by_amounts = []
+		split_equally = False
+		for entry in form.split_by_list.entries:
+			split_by.append(entry.data['split_by'])
+			split_by_amounts.append(entry.data['split_by_amount'])
+
+		split_equally = form.split_equally.data
+
+		#if equally paid or split
+		eql_paid_amt = total_amount/len(paid_by)
+		eql_split_amt = total_amount/len(split_by)
+
+		#Array storing net worth
+		amount = [0]*size
+		
+
+		'''
+
+		msg = ""
+		for index, i in enumerate(split_by):
+			msg += str(i)
+
+		logger(msg)
+		#logger("EXTRA PAY: " + str(paid_by_amounts[paid_by.index("ayushman")]))
+		#logger("EXTRA SPLIT: " + str(split_by_amounts[split_by.index("dheeraj")]))
+		'''
+		
 
 
+		#Adding the amounts to net worth for people who have paid
+		for index, i in enumerate(people_in_bill):
+			if i in paid_by:
+				if paid_equally != 'True':
+					amount[index] += paid_by_amounts[paid_by.index(i)]
+				else:
+					amount[index] += eql_paid_amt
+
+
+		#Subtracting the amounts to networth for people who have spent in the bill
+		for index, i in enumerate(people_in_bill):
+			if i in split_by:
+				if split_equally != 'True':
+					amount[index] -= split_by_amounts[split_by.index(i)]
+				else:
+					amount[index] -= eql_split_amt
+	
+		#using minimum cashflow algorithm to calculate the the minimum number of transactions required 
+		final_string = []
+		counter = 0
+		
+		mincashflow(amount = amount, people_in_bill = people_in_bill, final_string = final_string)
+		
+		cur = mysql.connection.cursor()
+		cur.execute("select max(bill_id) from bill_details")
+		data = cur.fetchone()
+		bill_id = data['max(bill_id)']
+
+		
+		return render_template('bill_transactions.html', transactions = final_string, bill_id = bill_id)
+
+	return render_template('add_bill.html', form = form)
+
+
+def logger(msg):
+	print("************************************")
+	print("\n\n\n")
+	print(msg)
+	print("\n\n\n")
+	print("************************************")
 
 
 #Script only runs if explictly told, but not if imported
