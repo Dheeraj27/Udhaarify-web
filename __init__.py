@@ -19,6 +19,9 @@ from flask_mail import Mail, Message
 #for getting the current date
 import datetime
 
+#for string to dictionary conversions
+import ast
+
 #creating the app engine
 app = Flask(__name__)
 
@@ -52,7 +55,13 @@ def is_logged_in(f):
 @app.route('/dashboard_menu')
 @is_logged_in
 def dashboard_menu():
-	return render_template('dashboard_menu.html')
+	user_owes = request.args.get('user_owes')
+	user_is_owed = request.args.get('user_is_owed')
+	net_amount = request.args.get('net_amount')
+	friends_user_owes = ast.literal_eval(request.args.get('friends_user_owes'))
+	friends_user_is_owed_by = ast.literal_eval(request.args.get('friends_user_is_owed_by'))
+
+	return render_template('dashboard_menu.html',user_owes = user_owes, user_is_owed = user_is_owed, net_amount = net_amount, friends_user_owes = friends_user_owes, friends_user_is_owed_by = friends_user_is_owed_by)
 
 @app.route('/all_transactions')
 @is_logged_in
@@ -62,7 +71,10 @@ def all_transactions():
 @app.route('/first_button')
 @is_logged_in
 def first():
-	return render_template('firstbtn.html')
+	user_owes = request.args.get('user_owes')
+	user_is_owed = request.args.get('user_is_owed')
+	net_amount = request.args.get('net_amount')
+	return render_template('firstbtn.html',user_owes = user_owes, user_is_owed = user_is_owed, net_amount = net_amount)
 
 @app.route('/second_button')
 @is_logged_in
@@ -74,9 +86,69 @@ def second():
 def add_friend_html():
 	return render_template('add-friend.html')
 
+@app.route('/delete_account', methods = ['GET', 'POST'])
+@is_logged_in
+def delete_account():
+	if request.method == 'POST':
+		password_candidate = request.form['password']
+		cur = mysql.connection.cursor()
+		cur.execute("select * from users where username = %s", [session['username']])
+		data = cur.fetchone()
+		password = data['password']
 
+		if sha256_crypt.verify(password_candidate, password):
+			result = cur.execute("select * from debt where sender = %s", [session['username']])
+			if result > 0:
+				flash("Clear existing debts first before deleting!", "danger")
+				return redirect(url_for('delete_account'))
+			else:
+				cur.execute("delete from users where username = %s", [session['username']])
+				cur.execute("delete from friends where friend1 = %s or friend2 = %s", (session['username'], session['username']))
+				mysql.connection.commit()
+				cur.close()
+				flash("Successfully deleted profile!", 'success')
+				
+				session['username'] = None
+				session['logged_in'] = False
 
+				return redirect(url_for('login'))
 
+		else:
+			flash("Incorrect password, cannot delete profile!", "danger")
+			return redirect(url_for('delete_account'))
+
+	return render_template('delete_account.html')
+
+@app.route('/change_password', methods = ['GET', 'POST'])
+@is_logged_in
+def change_password():
+	if request.method == 'POST':
+		password_candidate = request.form['password']
+
+		#Obtained checks in js to avoid the mismatch of the following data fields
+		new_password = request.form['new_password'] 
+		confirm_password = request.form['confirm_password']
+
+		if new_password != confirm_password:
+			flash('Mismatching passwords!', 'danger')
+			return redirect(url_for('change_password'))
+
+		cur = mysql.connection.cursor()
+		cur.execute("select * from users where username = %s", [session['username']])
+		data = cur.fetchone()
+		password = data['password']
+		
+		if sha256_crypt.verify(password_candidate, password):
+			cur.execute('update users set password = %s where username = %s', (sha256_crypt.encrypt(new_password), session['username']))
+			mysql.connection.commit()
+			flash("Password successfully changed, login again!", 'success')
+			return redirect(url_for('login'))
+		else:
+			flash("Incorrect password!", 'danger')
+			return redirect(url_for('change_password'))
+
+		return redirect(url_for('change_password'))
+	return render_template('change_password.html')
 
 
 #Homepage
@@ -86,10 +158,51 @@ def homepage():
 
 
 #Dashboard
-@app.route('/dashboard/')
+@app.route('/dashboard')
 @is_logged_in
 def dashboard():
-	return render_template('dashboard.html')
+	cur = mysql.connection.cursor()
+	
+	user_owes = 0
+	user_is_owed = 0
+
+	username = session['username']
+	
+	#Getting the amount user owes in total
+	result = cur.execute("select sum(amount) from debt where sender = %s", [username])
+	data = cur.fetchone()
+	if data['sum(amount)'] != None:
+		user_owes = int(data['sum(amount)'])
+
+
+	#Getting the amount is owed by friends
+	result = cur.execute("select sum(amount) from debt where receiver = %s", [username])
+	data = cur.fetchone()
+	if data['sum(amount)'] != None:
+		user_is_owed = int(data['sum(amount)'])
+
+	net_amount = user_is_owed - user_owes
+	friends_user_owes = {} #Friend dictionary whom the user owes 
+	friends_user_is_owed_by = {} #Friend dictionary who owe the user
+
+	#Adding friends to whom the user owes to dictionary
+	result = cur.execute("select receiver, amount from debt where sender = %s", [username])
+	if result > 0:
+		data = cur.fetchall()
+		for row in data:
+			friends_user_owes[row['receiver']] = row['amount']
+
+	#Adding friends who owe the user, to the dictionary
+	result = cur.execute("select sender, amount from debt where receiver = %s", [username])
+	if result > 0:
+		data = cur.fetchall()
+		for row in data:
+			friends_user_is_owed_by[row['sender']] = row['amount']
+
+
+	cur.close()
+	#Get the total balance while templating
+	return render_template('dashboard.html', user_owes = user_owes, user_is_owed = user_is_owed, net_amount = net_amount, friends_user_owes = friends_user_owes, friends_user_is_owed_by = friends_user_is_owed_by)
 
 
 
@@ -159,7 +272,7 @@ def login():
 			data = cur.fetchone()
 			password = data['password']
 
-			#comparing hashes
+			#comparing candidate with hashed password
 			if sha256_crypt.verify(password_candidate, password):
 				#Passes
 				session['logged_in'] = True
@@ -226,8 +339,22 @@ def logout():
 	flash('Successfully logged out.','success')
 	return redirect(url_for('login'))
 
+@app.route('/profile')
+@is_logged_in
+def profile():
+	cur = mysql.connection.cursor()
+	result = cur.execute("select name, username, email from users where username = %s", [session['username']])
+	if result > 0:
+		data = cur.fetchone()
+		
+		name = data['name']
+		username = data['username']
+		email = data['email']
 
-
+	else:
+		flash("User does not exist!")
+	
+	return render_template('profile.html', name = name, username = username, email = email)
 
 
 #Settle up
@@ -282,11 +409,9 @@ def settleup():
 				cur.close()
 
 				flash('Transaction recorded successfully!', 'success')
-				return redirect(url_for('dashboard'))
+				return redirect(url_for('settleup'))
 
 			
-
-
 			result = cur.execute('select amount from debt where sender = %s and receiver = %s',(friend, session['username']))
 			if result > 0:
 				#The friend owes this cur_amt to the user already
@@ -317,7 +442,7 @@ def settleup():
 				cur.close()
 
 				flash('Transaction noted succesfully', 'success')
-				return redirect(url_for('dashboard'))
+				return redirect(url_for('settleup'))
 				
 			
 			#No old debt exists between user and the friend at this point
@@ -330,39 +455,34 @@ def settleup():
 			cur.close()
 
 			flash('Transaction noted!','success')
-			return redirect(url_for('dashboard'))
+			return redirect(url_for('settleup'))
 
 
 	return render_template('settle_up.html')
 
 
-
-
-
-
-
 #ADD A BILL
 
 class PaidByForm(Form):
-	paid_by = StringField()
-	paid_by_amount = IntegerField()	
+	paid_by = StringField("")
+	paid_by_amount = IntegerField("")	
 
 class SplitByForm(Form):
-	split_by = StringField()
-	split_by_amount = IntegerField()
+	split_by = StringField("")
+	split_by_amount = IntegerField("")
 
 class PeopleInBill(Form):
-	person_in_bill = StringField()
+	person_in_bill = StringField("")
 
 class AddBillForm(Form):
 	#Description
-	desc = StringField(validators = [validators.DataRequired()])
+	desc = StringField("Description", validators = [validators.DataRequired()])
 	#Amount
-	amt = IntegerField(validators = [validators.DataRequired()])
+	amt = IntegerField("Amount", validators = [validators.DataRequired()])
 	#Notes
-	notes = TextAreaField()
+	notes = TextAreaField("Notes")
 	#Date
-	date = DateField()
+	date = DateField("Date")
 
 	#People in the bill
 	people_in_bill = FieldList(FormField(PeopleInBill), min_entries = 1)
@@ -403,7 +523,7 @@ def mincashflow(amount, people_in_bill, final_string, counter = 0):
 
 
 	#Add
-	add_debt(payer = people_in_bill[mxDebit],spender = people_in_bill[mxCredit],amt = minimum)
+	add_debt(spender = people_in_bill[mxDebit], payer = people_in_bill[mxCredit], amt = minimum)
 	
 	'''
 	
@@ -445,9 +565,59 @@ def add_debt(payer, spender, amt):
 		bill_id = data['max(bill_id)']
 		cur.execute('insert into bill_payers (bill_id, bill_payer, amount) values (%s, %s, %s)', (bill_id, payer, amt))
 		cur.execute('insert into bill_spenders (bill_id, bill_spender, amount) values (%s, %s, %s)', (bill_id, spender, amt))
-		cur.execute('insert into debt (sender, receiver, amount) values (%s, %s, %s)', (spender, payer, amt))
+		
+		#Equivalent to settle up
+		redundancy_check(sender=spender, receiver=payer, amt=amt)
+		
 		mysql.connection.commit()
 		cur.close()
+
+
+def redundancy_check(sender, receiver, amt):
+	cur = mysql.connection.cursor()
+	result = cur.execute('select amount from debt where sender = %s and receiver = %s',(sender, receiver))
+	if result > 0:
+		#sender already owes to receiver
+		data = cur.fetchone()
+		cur_amt = data['amount']
+		
+		cur_amt += amt
+		cur.execute('update debt set amount = %s where sender = %s and receiver = %s', (cur_amt, sender, receiver))
+		mysql.connection.commit()
+		return
+
+	
+	result = cur.execute('select amount from debt where sender = %s and receiver = %s',(receiver, sender))
+
+	if result > 0:
+		logger("Case2")
+		#receiver already owes the sender
+		data = cur.fetchone()
+		cur_amt = data['amount']
+		cur_amt -= amt
+		logger(str(cur_amt))
+		if cur_amt < 0:
+			#Now sender owes the receiver
+			cur_amt = cur_amt*-1;
+			cur.execute('update debt set sender = %s, receiver = %s, amount = %s where sender = %s and receiver = %s', (sender,receiver, cur_amt, receiver, sender))
+		
+		elif cur_amt > 0:
+			#receiver still owes the sender
+			cur.execute('update debt set amount = %s where sender = %s and receiver = %s', (cur_amt, receiver, sender))
+		
+		else:
+			#case where remaining amount is zero
+			cur.execute('delete from debt where sender = %s and receiver = %s', (receiver, sender))
+
+		mysql.connection.commit()
+		return
+		
+	
+	#No old debt exists between user and the friend at this point
+	cur.execute('insert into debt (sender, receiver, amount) values (%s, %s, %s)', (sender, receiver, amt))
+	mysql.connection.commit()
+	return
+
 
 
 @app.route('/dashboard/add-a-bill', methods = ['GET', 'POST'])
@@ -517,12 +687,6 @@ def add_bill():
 		#logger("EXTRA PAY: " + str(paid_by_amounts[paid_by.index("ayushman")]))
 		#logger("EXTRA SPLIT: " + str(split_by_amounts[split_by.index("dheeraj")]))
 		'''
-		
-		msg = str(total_amount) + " " + str(description) + " " + str(current_date)
-		for i in people_in_bill:
-			msg += i
-
-		logger(msg)
 
 		#Adding the amounts to net worth for people who have paid
 		for index, i in enumerate(people_in_bill):

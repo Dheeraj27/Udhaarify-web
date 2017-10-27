@@ -9,7 +9,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='stylesheets/styledash.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='stylesheets/r_style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='stylesheets/lightbox.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='stylesheets/color_box.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='stylesheets/color__box.css') }}">
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
     <script type="text/javascript" src = "{{ url_for('static', filename='jquery.colorbox.js') }}">
     </script>
@@ -67,7 +67,15 @@
         <div class="leftpane">
             <div class="container-fluid rlefty" align="left">
                 <div>
-                    <a id="r1" href="{{ url_for('dashboard_menu') }}" target="middlepane">
+
+
+
+
+                    <a id="r1" href="{{ url_for('dashboard_menu', user_owes = user_owes, user_is_owed = user_is_owed, net_amount = net_amount, friends_user_owes = friends_user_owes, friends_user_is_owed_by = friends_user_is_owed_by) }}" target="middlepane">
+
+
+
+
                         <div class="normal rfirst rleftnav">Dashboard</div>
                     </a>
                 </div>
@@ -101,11 +109,18 @@
                 </div>
             </div>
         </div>
-        <iframe src="{{ url_for('dashboard_menu') }}" class="middlepane" name="middlepane" height="100%">
+
+
+
+        <iframe src="{{ url_for('dashboard_menu',user_owes = user_owes, user_is_owed = user_is_owed, net_amount = net_amount, friends_user_owes = friends_user_owes, friends_user_is_owed_by = friends_user_is_owed_by) }}" class="middlepane" name="middlepane" height="100%">
+
+
+
+
         </iframe>
         <div class="rightpane">
             <div class="rightnav">
-                <a href="{{ url_for('first') }}" target="rightselect" data-toggle="tooltip" data-placement="bottom" title="Balances"> 
+                <a href="{{ url_for('first',user_owes = user_owes, user_is_owed = user_is_owed, net_amount = net_amount) }}" target="rightselect" data-toggle="tooltip" data-placement="bottom" title="Balances"> 
                 <button type="button" class="btn btn-xs">
                     <i class="glyphicon glyphicon-th-large"></i>
                 </button> </a>
