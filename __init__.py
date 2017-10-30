@@ -37,7 +37,7 @@ def is_logged_in(f):
 			return f(*args, **kwargs)
 		else:
 			flash('Unauthorized, please log in first.', 'danger')
-			return render_template('home.html')
+			return redirect(url_for('homepage'))
 	return wrap
 
 
@@ -101,7 +101,7 @@ def delete_account():
 				session['username'] = None
 				session['logged_in'] = False
 
-				return render_template('home.html')
+				return redirect(url_for('homepage'))
 
 		else:
 			flash("Incorrect password, cannot delete profile!", "danger")
@@ -112,6 +112,7 @@ def delete_account():
 @app.route('/change_password', methods = ['GET', 'POST'])
 @is_logged_in
 def change_password():
+
 	if request.method == 'POST':
 		password_candidate = request.form['password']
 
@@ -132,7 +133,7 @@ def change_password():
 			cur.execute('update users set password = %s where username = %s', (sha256_crypt.encrypt(new_password), session['username']))
 			mysql.connection.commit()
 			flash("Password successfully changed, login again!", 'success')
-			return render_template('home.html')
+			return redirect(url_for('homepage'))
 		else:
 			flash("Incorrect password!", 'danger')
 			return redirect(url_for('change_password'))
@@ -189,13 +190,13 @@ def homepage():
 
 				else:
 					flash("Invalid credentials", 'danger')
-					return render_template('home.html')
+					return redirect(url_for('homepage'))
 
 				cur.close()
 
 			else:
 				flash("Username not found", 'danger')
-				return render_template('home.html')
+				return redirect(url_for('homepage'))
 
 
 		elif method == 'register':
@@ -225,7 +226,7 @@ def homepage():
 def logout():
 	session.clear()
 	flash('Successfully logged out.','success')
-	return render_template('home.html')
+	return redirect(url_for('homepage'))
 
 
 #Dashboard
@@ -323,6 +324,53 @@ def profile():
 		flash("User does not exist!")
 	
 	return render_template('profile.html', name = name, username = username, email = email)
+
+
+@app.route('/show_bills/<int:id>')
+@is_logged_in
+def show_bills(id):
+	cur = mysql.connection.cursor()
+	res = cur.execute('select * from bill_details where bill_id = %s', [id])
+	if res > 0:
+		data = cur.fetchone()
+		amount = data['bill_amount']
+		description = data['description']
+		notes = data['notes']
+		date = data['date']
+
+	logger(str(amount))
+	result = cur.execute('select * from bill_payers where bill_id = %s', [id])
+	payer_dict = {}
+
+	if result>0:
+		data = cur.fetchall()
+		for row in data:
+			if row['bill_payer'] not in payer_dict.keys():
+				payer_dict[row['bill_payer']] = row['amount']
+			else:
+				payer_dict[row['bill_payer']] += row['amount']
+
+	result = cur.execute('select * from bill_spenders where bill_id = %s', [id])
+	spender_dict = {}
+
+	if result>0:
+		data = cur.fetchall()
+		for row in data:
+			if row['bill_spender'] not in spender_dict.keys():
+				spender_dict[row['bill_spender']] = row['amount']
+			else:
+				spender_dict[row['bill_spender']] += row['amount']
+
+	msg = ""
+	for i in payer_dict:
+		msg += str(i) + ":" + str(payer_dict[i])
+	logger(msg)
+	msg = ""
+	for i in spender_dict:
+		msg += str(i) + ":" + str(spender_dict[i])
+	logger(msg)
+	return render_template('show_bills.html', amount=amount, desc=description, notes=notes, date=date, payer_dict=payer_dict, spender_dict=spender_dict, bill_id=id)
+
 
 
 #Settle up
@@ -484,7 +532,7 @@ def mincashflow(amount, people_in_bill, final_string, counter = 0):
 	amount[mxDebit] += minimum;
 
 	# If minimum is the maximum amount to be
-	s = str(people_in_bill[mxDebit])+ " has to pay " + str(minimum) + " to " + str(people_in_bill[mxCredit])
+	s = str(people_in_bill[mxDebit])+ " has to pay " + str(int(minimum)) + " to " + str(people_in_bill[mxCredit])
 	logger(s)
 	final_string.append(s)
 
