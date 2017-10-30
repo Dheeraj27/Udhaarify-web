@@ -19,6 +19,42 @@
 
     });
     </script>
+    <style> /*for row responsive */
+		   *{
+		    box-sizing: border-box;
+		}
+		.rowres::after {
+		    content: "";
+		    clear: both;
+		    display: block;
+		}  /* row=rowres*/
+		[class*=“rcol-“] {
+		    float: left;
+		    padding: 15px;
+		} /*col = rcol */
+				    /* For desktop: */
+		    .rcol-1 {width: 8.33%;}
+		    .rcol-2 {width: 16.66%;}
+		    .rcol-3 {width: 25%;}
+		    .rcol-4 {width: 33.33%;}
+		    .rcol-5 {width: 41.66%;}
+		    .rcol-6 {width: 50%;}
+		    .rcol-7 {width: 58.33%;}
+		    .rcol-8 {width: 66.66%;}
+		    .rcol-9 {width: 75%;}
+		    .rcol-10 {width: 83.33%;}
+		    .rcol-11 {width: 91.66%;}
+		    .rcol-12 {width: 100%;}
+
+		 @media only screen and (max-width: 768px) {
+		/* For mobile phones: */
+		[class*=“rcol-“] {
+		    width: 100%;
+		}
+	}
+
+		
+    </style>
 </head>
 
 <body>
@@ -63,8 +99,8 @@
             <!-- /.container-fluid -->
         </nav>
     </div>
-    <div class="container rthree">
-        <div class="leftpane">
+    <div class="container rthree rowres">
+        <div class="leftpane rcol-3">
             <div class="container-fluid rlefty" align="left">
                 <div>
 
@@ -108,17 +144,18 @@
                     </div>
                 </div>
             </div>
-        </div>
+        </div>	
 
 
 
-        <iframe src="{{ url_for('dashboard_menu',user_owes = user_owes, user_is_owed = user_is_owed, net_amount = net_amount, friends_user_owes = friends_user_owes, friends_user_is_owed_by = friends_user_is_owed_by) }}" class="middlepane" name="middlepane" height="100%">
+        <iframe src="{{ url_for('dashboard_menu',user_owes = user_owes, user_is_owed = user_is_owed, net_amount = net_amount, friends_user_owes = friends_user_owes, friends_user_is_owed_by = friends_user_is_owed_by) }}" class="middlepane rcol-6" name="middlepane" height="100%">
 
 
 
 
         </iframe>
-        <div class="rightpane">
+        <div class="rightpane rcol-3">
+        
             <div class="rightnav">
                 <a href="{{ url_for('first',user_owes = user_owes, user_is_owed = user_is_owed, net_amount = net_amount) }}" target="rightselect" data-toggle="tooltip" data-placement="bottom" title="Balances"> 
                 <button type="button" class="btn btn-xs">
@@ -128,7 +165,7 @@
                 <button class="btn btn-xs" type="button">
                   <i class="glyphicon glyphicon-signal"></i>
                 </button></a>
-                
+ 
 
 
 
@@ -140,6 +177,10 @@
                 </iframe>
             </div>
         </div>
+
+        <!-- Footer -->
+
+
         <footer id="myFooter">
             <div class="container">
                 <div class="row">

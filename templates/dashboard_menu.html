@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <head>
 	<title>
-		SETTLE UP
+		Dashboard
 	</title>
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
@@ -31,63 +31,6 @@
 }
 @import url(http://fonts.googleapis.com/css?family=Oswald);
 
-
-
-
-.btn{
-   /* margin: 4px; */
-    box-shadow: 1px 1px 5px #888888;
-}
-
-
-   
-.btn-hot {
-color: #fff;
-background-color: #db5566;
-border-bottom:2px solid #af4451;
-}
-
-.btn-hot:hover, .btn-sky.active:focus, .btn-hot:focus, .open>.dropdown-toggle.btn-hot {
-color: #fff;
-background-color: #df6a78;
-border-bottom:2px solid #b25560;
-outline: none;}
-
-
-.btn-hot:active, .btn-hot.active {
-color: #fff;
-background-color: #c04b59;
-border-top:2px solid #9a3c47;
-margin-top: 2px;
-}
-
-.btn-sunny {
-color: #fff;
-background-color: #f4ad49;
-border-bottom:2px solid #c38a3a;
-}
-
-.btn-sunny:hover, .btn-sky.active:focus, .btn-sunny:focus, .open>.dropdown-toggle.btn-sunny {
-color: #fff;
-background-color: #f5b75f;
-border-bottom:2px solid #c4924c;
-outline: none;
-}
-
-
-.btn-sunny:active, .btn-sunny.active {
-color: #fff;
-background-color: #d69840;
-border-top:2px solid #ab7a33;
-margin-top: 2px;
-}
-
-.btn:focus,
-.btn:active:focus,
-.btn.active:focus {
-    outline: none;
-    outline-offset: 0px;
-}
 .well{
 	margin-top: 20px;
 }
@@ -113,17 +56,11 @@ a:hover {text-decoration:none; color:#fff;}
                    <a class="rsettle" href="/dashboard/settleup"> <button type="button" class="btn btn-sunny btn-sm text-uppercase rsettlebtn">Settle Up</button></a>
                 </div>
 
-
                 <table style="width: 100%">
                     <tr>
-                        <th>Total Balance
-                        </th>
-                        <th>
-                            You Owe
-                        </th>
-                        <th> 
-                            You are Owed
-                        </th>
+                        <th>Total Balance</th>
+                        <th>You Owe</th>
+                        <th> You are Owed</th>
                     </tr>
                      <tr>
                         <td width="33%" id="rtotalbal">
@@ -149,7 +86,26 @@ a:hover {text-decoration:none; color:#fff;}
                 <table style="width: 100%" class="rlist side-borders">
                     <tr>
                         <td>
-                            <table>
+                        {% if friend_user_owes|length == 0 %}
+                            <table width = "50%">
+                                    {% for key in friends_user_is_owed_by %}
+                                     <tr>
+                                        <td width="50%" class="rowename">
+                                        
+                                        </td>
+                                    </tr>
+                                     <tr>
+                                        <td width="50%" class="roweamt"> 
+                                            
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </table>
+
+                        {% else %}
+
+                            <table  width = "50%">
+
                                 {% for key in friends_user_owes %}
                                      <tr>
                                         <td width="50%" class="rowename"><i class="fa fa-tripadvisor" style="font-size:20px"></i>
@@ -163,6 +119,7 @@ a:hover {text-decoration:none; color:#fff;}
                                     </tr>
                                 {% endfor %}
                             </table>
+                        {% endif %}
                         </td>
 
 
@@ -170,18 +127,17 @@ a:hover {text-decoration:none; color:#fff;}
                             <table>
                                 {% for key in friends_user_is_owed_by %}
                                      <tr>
-                                        <td width="50%" class="rowename"><i class="fa fa-tripadvisor" style="font-size:20px"></i>      {{ key }}
+                                        <td width="50%" class="rowedname"><i class="fa fa-tripadvisor" style="font-size:20px"></i>      {{ key }}
                                         </td>
                                      </tr>
                                      <tr>
-                                        <td width="50%" class="roweamt">
+                                        <td width="50%" class="rowedamt">
                                             {{ friends_user_is_owed_by[key] }}
                                         </td>
                                     </tr>
                                 {% endfor %}
                             </table>
-                        </td> 
-                        </tr>    
+                        </td>     
                     </table>
         <script type="text/javascript" src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
         <script type="text/javascript" src="{{ url_for('static', filename='dash.js') }}"> </script>
